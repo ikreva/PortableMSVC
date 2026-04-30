@@ -72,15 +72,24 @@ jobs:
           -r ${{ matrix.rid }}
           --no-restore
           -p:IlcUseEnvironmentalTools=true
+          -p:PortableMSVCCompressWithUpx=false
+          -p:PublishDir=artifacts\publish\${{ matrix.rid }}\
 
       - name: Package
         shell: pwsh
         run: |
           $rid = '${{ matrix.rid }}'
-          $publishDir = Join-Path $PWD "bin\Release\net10.0\$rid\publish"
+          $publishDir = Join-Path $PWD "artifacts\publish\$rid"
+          $exePath = Join-Path $publishDir 'PortableMSVC.exe'
+          if (-not (Test-Path -LiteralPath $exePath)) {
+            Write-Host "PortableMSVC.exe was not found under $publishDir"
+            Write-Host "Available PortableMSVC.exe files:"
+            Get-ChildItem -Recurse -Filter PortableMSVC.exe | ForEach-Object { Write-Host $_.FullName }
+            throw "Publish output is missing PortableMSVC.exe"
+          }
           $stageDir = Join-Path $PWD "artifacts\PortableMSVC-$rid"
           New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
-          Copy-Item -LiteralPath (Join-Path $publishDir 'PortableMSVC.exe') -Destination $stageDir
+          Copy-Item -LiteralPath $exePath -Destination $stageDir
           Compress-Archive -LiteralPath $stageDir -DestinationPath "artifacts\PortableMSVC-$rid.zip" -Force
 
       - name: Upload artifact
