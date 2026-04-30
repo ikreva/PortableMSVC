@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="PortableMSVC.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/PortableMSVC.Tests/PortableMSVC.Tests.csproj" />
+  </Folder>
+</Solution>

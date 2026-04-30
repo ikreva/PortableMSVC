@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <PublishSingleFile>true</PublishSingleFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>assets\PortableMSVC.ico</ApplicationIcon>
+    <PortableMSVCUpxPath>$(MSBuildProjectDirectory)\tools\upx\upx.exe</PortableMSVCUpxPath>
+    <PortableMSVCCompressWithUpx>true</PortableMSVCCompressWithUpx>
+    <_PortableMSVCUpxSupportedRid Condition="'$(RuntimeIdentifier)' == 'win-arm64' or '$(RuntimeIdentifier)' == 'win-arm'">false</_PortableMSVCUpxSupportedRid>
+    <_PortableMSVCUpxSupportedRid Condition="'$(_PortableMSVCUpxSupportedRid)' == ''">true</_PortableMSVCUpxSupportedRid>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PortableMSVCNativeAotVcLibDir)' != ''">
+    <AdditionalNativeLibraryDirectories Include="$(PortableMSVCNativeAotVcLibDir)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PortableMSVCNativeAotSdkUcrtLibDir)' != ''">
+    <AdditionalNativeLibraryDirectories Include="$(PortableMSVCNativeAotSdkUcrtLibDir)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PortableMSVCNativeAotSdkUmLibDir)' != ''">
+    <AdditionalNativeLibraryDirectories Include="$(PortableMSVCNativeAotSdkUmLibDir)" />
+  </ItemGroup>
+
+  <Target Name="PatchPortableMSVCOriginalFilename" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <ItemGroup>
+      <_PortableMSVCExeToPatch Include="$(TargetDir)$(AssemblyName).exe" Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
+      <_PortableMSVCExeToPatch Include="$(NativeOutputPath)$(AssemblyName).exe" Condition="'$(NativeOutputPath)' != '' and Exists('$(NativeOutputPath)$(AssemblyName).exe')" />
+    </ItemGroup>
+    <Exec
+      Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\PatchOriginalFilename.ps1&quot; @(_PortableMSVCExeToPatch->'&quot;%(FullPath)&quot;', ' ')"
+      Condition="'@(_PortableMSVCExeToPatch)' != ''" />
+  </Target>
+
+  <Target Name="FinalizePortableMSVCPublishExecutable" AfterTargets="CopyNativeBinary" Condition="'$(OS)' == 'Windows_NT' and '$(PublishDir)' != '' and Exists('$(PublishDir)$(AssemblyName).exe')">
+    <ItemGroup>
+      <_PortableMSVCPublishExe Include="$(PublishDir)$(AssemblyName).exe" />
+    </ItemGroup>
+    <Exec
+      Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\PatchOriginalFilename.ps1&quot; @(_PortableMSVCPublishExe->'&quot;%(FullPath)&quot;', ' ')" />
+    <Message
+      Importance="high"
+      Text="Compressing @(_PortableMSVCPublishExe->'%(FullPath)', ', ') with UPX --best"
+      Condition="'$(PortableMSVCCompressWithUpx)' == 'true' and '$(_PortableMSVCUpxSupportedRid)' == 'true' and Exists('$(PortableMSVCUpxPath)')" />
+    <Exec
+      Command="&quot;$(PortableMSVCUpxPath)&quot; --best @(_PortableMSVCPublishExe->'&quot;%(FullPath)&quot;', ' ')"
+      Condition="'$(PortableMSVCCompressWithUpx)' == 'true' and '$(_PortableMSVCUpxSupportedRid)' == 'true' and Exists('$(PortableMSVCUpxPath)')" />
+    <Warning
+      Text="UPX compression skipped because $(PortableMSVCUpxPath) was not found."
+      Condition="'$(PortableMSVCCompressWithUpx)' == 'true' and '$(_PortableMSVCUpxSupportedRid)' == 'true' and !Exists('$(PortableMSVCUpxPath)')" />
+  </Target>
+
+</Project>
