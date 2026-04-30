@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore PortableMSVC.slnx
+
+      - name: Refresh test manifests
+        run: dotnet run --project PortableMSVC.csproj -c Release -- cache refresh --cache Cache\manifests
+
+      - name: Test
+        run: dotnet test PortableMSVC.slnx -c Release --no-restore
+
+  publish:
+    name: Publish ${{ matrix.rid }}
+    runs-on: windows-latest
+    needs: test
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            vc_arch: x64
+          - rid: win-x86
+            vc_arch: x64_x86
+          - rid: win-arm64
+            vc_arch: x64_arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.vc_arch }}
+
+      - name: Restore
+        run: dotnet restore PortableMSVC.csproj -r ${{ matrix.rid }}
+
+      - name: Publish
+        run: >
+          dotnet publish PortableMSVC.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --no-restore
+          -p:IlcUseEnvironmentalTools=true
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $rid = '${{ matrix.rid }}'
+          $publishDir = Join-Path $PWD "bin\Release\net10.0\$rid\publish"
+          $stageDir = Join-Path $PWD "artifacts\PortableMSVC-$rid"
+          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+          Copy-Item -LiteralPath (Join-Path $publishDir 'PortableMSVC.exe') -Destination $stageDir
+          Compress-Archive -LiteralPath $stageDir -DestinationPath "artifacts\PortableMSVC-$rid.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PortableMSVC-${{ matrix.rid }}
+          path: artifacts/PortableMSVC-${{ matrix.rid }}.zip
+          if-no-files-found: error
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/PortableMSVC-${{ matrix.rid }}.zip
