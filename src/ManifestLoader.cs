@@ -1,14 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
 
 namespace PortableMSVC;
 
 public sealed class ManifestLoader
 {
-	public static readonly string[] KnownVsAliases = new string[4] { "2019", "2022", "2026", "latest" };
+	public static readonly string[] KnownVsAliases = ["2019", "2022", "2026", "latest"];
 
 	private readonly string _manifestDirectory;
 

@@ -1,10 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace PortableMSVC;
 
@@ -20,7 +14,7 @@ public static class Cli
 				return 0;
 			}
 			string command = args[0].ToLowerInvariant();
-			Dictionary<string, List<string>> options = ParseOptions(args.Skip(1).ToArray());
+			Dictionary<string, List<string>> options = ParseOptions(args, startIndex: 1);
 			switch (command)
 			{
 			case "list":
@@ -168,7 +162,7 @@ public static class Cli
 		{
 			IReadOnlyList<string> vsValues = GetValues(options, "--vs");
 			IReadOnlyList<string> aliases = vsValues.Count == 0
-				? new[] { "latest", "2026", "2022", "2019" }
+				? ["latest", "2026", "2022", "2019"]
 				: vsValues.Select(ManifestLoader.NormalizeVs).Distinct().ToList();
 			bool force = HasOption(options, "--force");
 			foreach (string alias in aliases)
@@ -211,11 +205,11 @@ public static class Cli
 		return new PlanRequest(ManifestLoader.NormalizeVs(vs), GetOption(options, "--vc"), GetOption(options, "--sdk"), GetOption(options, "--redist"), host, targets, HasOption(options, "--with-runtime"));
 	}
 
-	private static Dictionary<string, List<string>> ParseOptions(string[] args)
+	private static Dictionary<string, List<string>> ParseOptions(string[] args, int startIndex)
 	{
 		Dictionary<string, List<string>> result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 		result[""] = new List<string>();
-		for (int i = 0; i < args.Length; i++)
+		for (int i = startIndex; i < args.Length; i++)
 		{
 			string arg = args[i];
 			if (!arg.StartsWith("--", StringComparison.Ordinal))
@@ -256,7 +250,7 @@ public static class Cli
 	private static IReadOnlyList<string> GetValues(Dictionary<string, List<string>> options, string name)
 	{
 		List<string>? values;
-		return options.TryGetValue(name, out values) ? values : new List<string>();
+		return options.TryGetValue(name, out values) ? values : Array.Empty<string>();
 	}
 
 	private static bool HasOption(Dictionary<string, List<string>> options, string name)

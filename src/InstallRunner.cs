@@ -1,17 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace PortableMSVC;
 
 public sealed class InstallRunner
 {
 	private const int MaxParallelDownloads = 6;
+
+	private static readonly string[] ArchitectureNames = ["x86", "x64", "arm", "arm64"];
 
 	private readonly Downloader _downloader = new Downloader();
 
@@ -705,7 +701,7 @@ exit /b %exitCode%
 
 		foreach (string versionDirectory in Directory.GetDirectories(bin))
 		{
-			foreach (string architecture in new[] { "x86", "x64", "arm", "arm64" })
+			foreach (string architecture in ArchitectureNames)
 			{
 				string architectureDirectory = Path.Combine(versionDirectory, architecture);
 				if (architecture.Equals(plan.Host, StringComparison.OrdinalIgnoreCase))
@@ -755,7 +751,7 @@ exit /b %exitCode%
 
 	private static void DeleteKnownArchitectureDirectoriesExcept(string parent, HashSet<string> wanted)
 	{
-		foreach (string architecture in new[] { "x86", "x64", "arm", "arm64" })
+		foreach (string architecture in ArchitectureNames)
 		{
 			if (!wanted.Contains(architecture))
 			{
