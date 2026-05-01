@@ -5,7 +5,7 @@ namespace PortableMSVC;
 
 public sealed class Downloader
 {
-	private static readonly object ConsoleLock = new object();
+	private static readonly Lock ConsoleLock = new();
 
 	private static readonly ConcurrentDictionary<string, SemaphoreSlim> DownloadLocks = new(StringComparer.OrdinalIgnoreCase);
 
@@ -15,7 +15,7 @@ public sealed class Downloader
 	{
 		Directory.CreateDirectory(cacheDirectory);
 		string baseName = Path.GetFileName(payload.FileName.Replace('\\', Path.DirectorySeparatorChar));
-		string prefix = (string.IsNullOrWhiteSpace(payload.Sha256) ? Sanitize(payload.PackageId) : payload.Sha256.Substring(0, Math.Min(12, payload.Sha256.Length)));
+		string prefix = string.IsNullOrWhiteSpace(payload.Sha256) ? Sanitize(payload.PackageId) : payload.Sha256[..Math.Min(12, payload.Sha256.Length)];
 		string fileName = prefix + "_" + baseName;
 		string destination = Path.Combine(cacheDirectory, fileName);
 		SemaphoreSlim downloadLock = DownloadLocks.GetOrAdd(destination, _ => new SemaphoreSlim(1, 1));
@@ -84,11 +84,9 @@ public sealed class Downloader
 			return true;
 		}
 
-		await using (FileStream stream = File.OpenRead(path))
-		{
-			string actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant();
-			return actual.Equals(expected, StringComparison.OrdinalIgnoreCase);
-		}
+		await using FileStream stream = File.OpenRead(path);
+		string actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant();
+		return actual.Equals(expected, StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static string Sanitize(string value)
@@ -99,7 +97,7 @@ public sealed class Downloader
 		{
 			return value;
 		}
-		HashSet<char> invalidSet = new HashSet<char>(invalidChars);
+		HashSet<char> invalidSet = new(invalidChars);
 		return string.Create(value.Length, (value, invalidSet), static (span, state) =>
 		{
 			for (int i = 0; i < state.value.Length; i++)

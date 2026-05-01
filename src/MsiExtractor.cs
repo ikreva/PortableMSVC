@@ -23,7 +23,7 @@ public sealed class MsiExtractor
 		}
 		finally
 		{
-			MsiNative.MsiCloseHandle(database);
+			_ = MsiNative.MsiCloseHandle(database);
 		}
 	}
 
@@ -93,7 +93,7 @@ public sealed class MsiExtractor
 		}
 		finally
 		{
-			MsiNative.MsiCloseHandle(database);
+			_ = MsiNative.MsiCloseHandle(database);
 		}
 	}
 
@@ -150,13 +150,13 @@ public sealed class MsiExtractor
 			}
 			finally
 			{
-				MsiNative.MsiCloseHandle(record);
+				_ = MsiNative.MsiCloseHandle(record);
 			}
 			return true;
 		}
 		finally
 		{
-			MsiNative.MsiCloseHandle(view);
+			_ = MsiNative.MsiCloseHandle(view);
 		}
 	}
 
@@ -233,14 +233,14 @@ public sealed class MsiExtractor
 				}
 				finally
 				{
-					MsiNative.MsiCloseHandle(record);
+					_ = MsiNative.MsiCloseHandle(record);
 				}
 			}
 			return rows;
 		}
 		finally
 		{
-			MsiNative.MsiCloseHandle(view);
+			_ = MsiNative.MsiCloseHandle(view);
 		}
 	}
 

@@ -1,0 +1,43 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+# Source files intentionally live under src/ while the public namespace remains
+# PortableMSVC. Treat the folder as a source root, not as a namespace segment.
+dotnet_diagnostic.IDE0130.severity = none
+
+# Keep code-style suggestions useful without turning editor output into noise.
+# These rules mostly request syntax-only rewrites with no behavioral benefit.
+dotnet_diagnostic.IDE0018.severity = silent
+dotnet_diagnostic.IDE0028.severity = silent
+dotnet_diagnostic.IDE0039.severity = silent
+dotnet_diagnostic.IDE0056.severity = silent
+dotnet_diagnostic.IDE0057.severity = silent
+dotnet_diagnostic.IDE0063.severity = silent
+dotnet_diagnostic.IDE0090.severity = silent
+dotnet_diagnostic.IDE0270.severity = silent
+dotnet_diagnostic.IDE0290.severity = silent
+dotnet_diagnostic.IDE0300.severity = silent
+dotnet_diagnostic.IDE0301.severity = silent
+dotnet_diagnostic.IDE0305.severity = silent
+dotnet_diagnostic.IDE0306.severity = silent
+dotnet_diagnostic.IDE0350.severity = silent
+
+# Roslynator is an editor-side extension here, not a project dependency.
+# Keep its style-only hints out of the Problems list unless the project opts in.
+dotnet_diagnostic.RCS1077.severity = silent
+dotnet_diagnostic.RCS1112.severity = silent
+dotnet_diagnostic.RCS1146.severity = silent
+dotnet_diagnostic.RCS1173.severity = silent
+
+# Unused parameters are sometimes deliberate in parser/probing helpers.
+dotnet_diagnostic.RCS1163.severity = silent
