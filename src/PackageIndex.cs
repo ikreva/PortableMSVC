@@ -32,27 +32,45 @@ public sealed partial class PackageIndex
 		ProductLineVersion = productLineVersion;
 		ProductInfoId = productInfoId;
 		Packages = packages;
-		_packages = packages
-			.GroupBy(x => x.IdLower, StringComparer.OrdinalIgnoreCase)
-			.ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
+		_packages = new Dictionary<string, List<PackageInfo>>(StringComparer.OrdinalIgnoreCase);
+		foreach (PackageInfo package in packages)
+		{
+			if (!_packages.TryGetValue(package.Id, out List<PackageInfo>? matchingPackages))
+			{
+				matchingPackages = new List<PackageInfo>();
+				_packages[package.Id] = matchingPackages;
+			}
+			matchingPackages.Add(package);
+		}
 	}
 
 	public PackageInfo? Find(string id)
 	{
-		if (!_packages.TryGetValue(id.ToLowerInvariant(), out List<PackageInfo>? packages))
+		if (!_packages.TryGetValue(id, out List<PackageInfo>? packages))
 		{
 			return null;
 		}
 
 		// manifest 存在多语言重复包时，优先选择 neutral/en-US 包。
-		return packages.FirstOrDefault(x => x.Language is null or "en-US" or "neutral")
-			?? packages.FirstOrDefault(x => x.Language == null)
-			?? packages[0];
+		PackageInfo? languageNeutral = null;
+		foreach (PackageInfo package in packages)
+		{
+			if (package.Language is null)
+			{
+				languageNeutral ??= package;
+				continue;
+			}
+			if (package.Language is "en-US" or "neutral")
+			{
+				return package;
+			}
+		}
+		return languageNeutral ?? packages[0];
 	}
 
 	public bool Contains(string id)
 	{
-		return _packages.ContainsKey(id.ToLowerInvariant());
+		return _packages.ContainsKey(id);
 	}
 
 	public IReadOnlyList<PackageInfo> ResolveDependencyClosure(IEnumerable<string> rootIds, Func<PackageInfo, bool>? expandDependencies = null)
@@ -147,7 +165,8 @@ public sealed partial class PackageIndex
 		string? alias = requested;
 		if (string.IsNullOrWhiteSpace(alias))
 		{
-			alias = versions.LastOrDefault()?.Split('.').Last();
+			string? latest = versions.Count == 0 ? null : versions[^1];
+			alias = latest == null ? null : LastSegment(latest, '.');
 		}
 		return ResolveVersion("Windows SDK", versions, alias);
 	}
@@ -157,7 +176,7 @@ public sealed partial class PackageIndex
 		PackageInfo? sdkPackage = Find("Win10SDK_" + fullSdkVersion) ?? Find("Win11SDK_" + fullSdkVersion);
 		if (sdkPackage is null)
 		{
-			string? shortVersion = fullSdkVersion.Split('.').LastOrDefault();
+			string? shortVersion = LastSegment(fullSdkVersion, '.');
 			if (shortVersion != null)
 			{
 				sdkPackage = Find("Win10SDK_10.0." + shortVersion) ?? Find("Win11SDK_10.0." + shortVersion);
@@ -196,7 +215,7 @@ public sealed partial class PackageIndex
 			.Where(x => x.Equals(normalized, StringComparison.OrdinalIgnoreCase)
 				|| x.StartsWith(normalized + ".", StringComparison.OrdinalIgnoreCase)
 				|| x.EndsWith("." + normalized, StringComparison.OrdinalIgnoreCase)
-				|| x.Split('.').Last().Equals(normalized, StringComparison.OrdinalIgnoreCase))
+				|| LastSegmentEquals(x, '.', normalized))
 			.OrderBy(x => x, NaturalVersionComparer.Instance)
 			.ToList();
 		if (matches.Count == 0)
@@ -204,6 +223,22 @@ public sealed partial class PackageIndex
 			throw new ArgumentException($"{kind} 版本 '{requested}' 未找到。可用版本：{string.Join(", ", versions)}");
 		}
 		return new ResolvedVersion(normalized, matches[matches.Count - 1]);
+	}
+
+	private static string? LastSegment(string value, char separator)
+	{
+		int index = value.LastIndexOf(separator);
+		return index < 0
+			? value
+			: index == value.Length - 1 ? null : value[(index + 1)..];
+	}
+
+	private static bool LastSegmentEquals(string value, char separator, string expected)
+	{
+		ReadOnlySpan<char> span = value.AsSpan();
+		int index = span.LastIndexOf(separator);
+		ReadOnlySpan<char> segment = index < 0 ? span : span[(index + 1)..];
+		return segment.Equals(expected.AsSpan(), StringComparison.OrdinalIgnoreCase);
 	}
 
 	[GeneratedRegex("^Microsoft\\.VC\\.(?<version>.+)\\.Tools\\.HostX64\\.TargetX64\\.base$", RegexOptions.IgnoreCase)]

@@ -19,28 +19,65 @@ public sealed class NaturalVersionComparer : IComparer<string>
 		{
 			return 1;
 		}
-		string[] left = Split(x);
-		string[] right = Split(y);
-		int count = Math.Max(left.Length, right.Length);
-		for (int i = 0; i < count; i++)
+
+		ReadOnlySpan<char> left = x.AsSpan();
+		ReadOnlySpan<char> right = y.AsSpan();
+		int leftIndex = 0;
+		int rightIndex = 0;
+		while (true)
 		{
-			string a = ((i < left.Length) ? left[i] : "0");
-			string b = ((i < right.Length) ? right[i] : "0");
-			int intA;
-			bool numericA = int.TryParse(a, out intA);
-			int intB;
-			bool numericB = int.TryParse(b, out intB);
-			int comparison = ((numericA && numericB) ? intA.CompareTo(intB) : StringComparer.OrdinalIgnoreCase.Compare(a, b));
+			bool hasLeft = TryReadSegment(left, ref leftIndex, out ReadOnlySpan<char> leftSegment);
+			bool hasRight = TryReadSegment(right, ref rightIndex, out ReadOnlySpan<char> rightSegment);
+			if (!hasLeft && !hasRight)
+			{
+				return 0;
+			}
+
+			int comparison = CompareSegment(hasLeft ? leftSegment : "0", hasRight ? rightSegment : "0");
 			if (comparison != 0)
 			{
 				return comparison;
 			}
 		}
-		return 0;
 	}
 
-	private static string[] Split(string value)
+	private static int CompareSegment(ReadOnlySpan<char> left, ReadOnlySpan<char> right)
 	{
-		return value.Split(new char[3] { '.', '-', '_' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		bool numericLeft = int.TryParse(left, out int leftValue);
+		bool numericRight = int.TryParse(right, out int rightValue);
+		return numericLeft && numericRight
+			? leftValue.CompareTo(rightValue)
+			: left.CompareTo(right, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool TryReadSegment(ReadOnlySpan<char> value, ref int index, out ReadOnlySpan<char> segment)
+	{
+		while (index < value.Length)
+		{
+			while (index < value.Length && IsSeparator(value[index]))
+			{
+				index++;
+			}
+
+			int start = index;
+			while (index < value.Length && !IsSeparator(value[index]))
+			{
+				index++;
+			}
+
+			segment = value[start..index].Trim();
+			if (segment.Length > 0)
+			{
+				return true;
+			}
+		}
+
+		segment = default;
+		return false;
+	}
+
+	private static bool IsSeparator(char value)
+	{
+		return value is '.' or '-' or '_';
 	}
 }

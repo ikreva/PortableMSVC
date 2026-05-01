@@ -16,10 +16,23 @@ public sealed class MsiExtractor
 		nint database = Open(msiPath);
 		try
 		{
-			return (from x in Query(database, "SELECT `Cabinet` FROM `Media`")
-				select x[0] into x
-				where !string.IsNullOrWhiteSpace(x)
-				select x.TrimStart('#')).Distinct<string>(StringComparer.OrdinalIgnoreCase).ToList();
+			List<string> cabinets = new();
+			HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+			foreach (string[] row in Query(database, "SELECT `Cabinet` FROM `Media`"))
+			{
+				string cabinet = row[0];
+				if (string.IsNullOrWhiteSpace(cabinet))
+				{
+					continue;
+				}
+
+				cabinet = cabinet.TrimStart('#');
+				if (seen.Add(cabinet))
+				{
+					cabinets.Add(cabinet);
+				}
+			}
+			return cabinets;
 		}
 		finally
 		{
@@ -33,31 +46,57 @@ public sealed class MsiExtractor
 		try
 		{
 			// MSI 表描述 CAB 内文件应落到哪里。这里直接重建路径映射。
-			Dictionary<string, DirectoryRow> directories = (from x in Query(database, "SELECT `Directory`, `Directory_Parent`, `DefaultDir` FROM `Directory`")
-				select new DirectoryRow(x[0], EmptyToNull(x[1]), x[2])).ToDictionary<DirectoryRow, string>((DirectoryRow x) => x.Id, StringComparer.OrdinalIgnoreCase);
-			Dictionary<string, string> components = Query(database, "SELECT `Component`, `Directory_` FROM `Component`").ToDictionary<string[], string, string>((string[] x) => x[0], (string[] x) => x[1], StringComparer.OrdinalIgnoreCase);
-			List<FileRow> files = (from x in Query(database, "SELECT `File`, `Component_`, `FileName`, `Sequence` FROM `File`")
-				select new FileRow(x[0], x[1], LongName(x[2]), int.Parse(x[3]))).ToList();
-			List<MediaRow> media = (from x in Query(database, "SELECT `DiskId`, `LastSequence`, `Cabinet` FROM `Media`")
-				select new MediaRow(int.Parse(x[0]), int.Parse(x[1]), x[2]) into x
-				orderby x.LastSequence
-				select x).ToList();
-			Dictionary<string, string> directoryPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-			Dictionary<string, string> fileTargets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			Dictionary<string, DirectoryRow> directories = new(StringComparer.OrdinalIgnoreCase);
+			foreach (string[] row in Query(database, "SELECT `Directory`, `Directory_Parent`, `DefaultDir` FROM `Directory`"))
+			{
+				directories[row[0]] = new DirectoryRow(row[0], EmptyToNull(row[1]), row[2]);
+			}
+
+			Dictionary<string, string> components = new(StringComparer.OrdinalIgnoreCase);
+			foreach (string[] row in Query(database, "SELECT `Component`, `Directory_` FROM `Component`"))
+			{
+				components[row[0]] = row[1];
+			}
+
+			List<FileRow> files = new();
+			foreach (string[] row in Query(database, "SELECT `File`, `Component_`, `FileName`, `Sequence` FROM `File`"))
+			{
+				files.Add(new FileRow(row[0], row[1], LongName(row[2]), int.Parse(row[3])));
+			}
+
+			List<MediaRow> media = new();
+			foreach (string[] row in Query(database, "SELECT `DiskId`, `LastSequence`, `Cabinet` FROM `Media`"))
+			{
+				media.Add(new MediaRow(int.Parse(row[0]), int.Parse(row[1]), row[2]));
+			}
+			media.Sort(static (left, right) => left.LastSequence.CompareTo(right.LastSequence));
+
+			Dictionary<string, string> directoryPaths = new(StringComparer.OrdinalIgnoreCase);
+			Dictionary<MediaRow, Dictionary<string, string>> targetsByMedia = new();
 			foreach (FileRow file in files)
 			{
 				if (components.TryGetValue(file.Component, out var directoryId))
 				{
+					MediaRow? mediaRow = FindMedia(media, file.Sequence);
+					if (mediaRow is null)
+					{
+						continue;
+					}
+
 					string relativeDirectory = ResolveDirectory(directoryId);
 					string target = SafeOutputPath(outputDirectory, relativeDirectory, file.FileName);
-					fileTargets[file.Id] = target;
+					if (!targetsByMedia.TryGetValue(mediaRow, out Dictionary<string, string>? targets))
+					{
+						targets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+						targetsByMedia[mediaRow] = targets;
+					}
+					targets[file.Id] = target;
 				}
 			}
-			foreach (IGrouping<MediaRow?, FileRow> group in from fileRow in files
-				group fileRow by FindMedia(media, fileRow.Sequence))
+			foreach (MediaRow mediaRow in media)
 			{
-				MediaRow? mediaRow = group.Key;
-				if (mediaRow is null || string.IsNullOrWhiteSpace(mediaRow.Cabinet))
+				if (!targetsByMedia.TryGetValue(mediaRow, out Dictionary<string, string>? groupTargets) ||
+					string.IsNullOrWhiteSpace(mediaRow.Cabinet))
 				{
 					continue;
 				}
@@ -71,7 +110,6 @@ public sealed class MsiExtractor
 					}
 					ExtractEmbeddedCabinet(database, cabinetName, cabinetPath);
 				}
-				Dictionary<string, string> groupTargets = group.Where((FileRow fileRow) => fileTargets.ContainsKey(fileRow.Id)).ToDictionary<FileRow, string, string>((FileRow fileRow) => fileRow.Id, (FileRow fileRow) => fileTargets[fileRow.Id], StringComparer.OrdinalIgnoreCase);
 				ExtractCabinet(cabinetPath, groupTargets);
 			}
 			string ResolveDirectory(string id)
@@ -246,7 +284,14 @@ public sealed class MsiExtractor
 
 	private static MediaRow? FindMedia(IReadOnlyList<MediaRow> media, int sequence)
 	{
-		return media.FirstOrDefault((MediaRow x) => sequence <= x.LastSequence);
+		foreach (MediaRow row in media)
+		{
+			if (sequence <= row.LastSequence)
+			{
+				return row;
+			}
+		}
+		return null;
 	}
 
 	private static string LongName(string value)
