@@ -92,6 +92,31 @@ public sealed class MinimalPlanTests
     }
 
     [TestMethod]
+    public void DependencyClosureFiltersMsvcPackagesForUnrequestedArchitectures()
+    {
+        var index = SyntheticMsvc1451Index();
+
+        var plan = new PlanBuilder().Build(index, new PlanRequest(
+            "test",
+            "14.51",
+            "26100",
+            "14.51",
+            Architecture.X64,
+            [Architecture.X64, Architecture.X86],
+            WithRuntime: false));
+
+        Assert.IsTrue(plan.Success, string.Join(Environment.NewLine, plan.Issues.Select(x => $"{x.Code}: {x.Message}")));
+        Assert.IsTrue(plan.DependencyClosure.Any(x => x.Id.Equals("Microsoft.VC.14.51.ASAN.X86.base", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsTrue(plan.DependencyClosure.Any(x => x.Id.Equals("Microsoft.VC.14.51.ASAN.X64.base", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsFalse(
+            plan.DependencyClosure.Any(x => x.Id.Equals("Microsoft.VC.14.51.ASAN.ARM64.base", StringComparison.OrdinalIgnoreCase)),
+            "Unrequested ARM64 ASAN package should not be downloaded just because x86 ASAN depends on it.");
+        Assert.IsFalse(
+            plan.Payloads.Any(x => x.PackageId.Equals("Microsoft.VC.14.51.ASAN.ARM64.base", StringComparison.OrdinalIgnoreCase)),
+            "Unrequested ARM64 ASAN payload should not be downloaded.");
+    }
+
+    [TestMethod]
     public void Vs2019Arm32RuntimeInstallerAbsenceIsReportedFromManifest()
     {
         var plan = Build("2019", "14.29.16.11", "22621", "14.29.16.11", Architecture.X64, [Architecture.Arm], withRuntime: true);
@@ -226,5 +251,76 @@ public sealed class MinimalPlanTests
             index.ProductLineVersion,
             index.ProductInfoId,
             packages);
+    }
+
+    private static PackageIndex SyntheticMsvc1451Index()
+    {
+        List<PackageInfo> packages =
+        [
+            Package("Microsoft.VisualCpp.DIA.SDK"),
+            Package("Microsoft.VisualCpp.Tools.Core.x86"),
+            Package("Microsoft.VisualCpp.Tools.HostX64.TargetX64"),
+            Package("Microsoft.VisualCpp.Tools.HostX64.TargetX86"),
+            Package("Microsoft.VisualStudio.VC.DevCmd"),
+            Package("Microsoft.VisualStudio.VC.vcvars"),
+            Package("Microsoft.VisualStudio.VsDevCmd.Core.WinSdk"),
+            Package("Microsoft.VC.14.51.CRT.Headers.base"),
+            Package("Microsoft.VC.14.51.CRT.Source.base"),
+            Package("Microsoft.VC.14.51.ASAN.Headers.base"),
+            Package("Microsoft.VC.14.51.PGO.Headers.base"),
+            Package("Microsoft.VC.14.51.ATL.Headers.base"),
+            Package("Microsoft.VC.14.51.ATL.Source.base"),
+            Package("Microsoft.VC.14.51.Tools.HostX64.TargetX64.base", payloads: [Payload("tools-x64.vsix")]),
+            Package("Microsoft.VC.14.51.Tools.HostX64.TargetX86.base", payloads: [Payload("tools-x86.vsix")]),
+            Package("Microsoft.VC.14.51.Tools.HostX64.TargetX64.Res.base"),
+            Package("Microsoft.VC.14.51.Tools.HostX64.TargetX86.Res.base"),
+            Package("Microsoft.VC.14.51.CRT.x64.Desktop.base"),
+            Package("Microsoft.VC.14.51.CRT.x64.Store.base"),
+            Package("Microsoft.VC.14.51.CRT.x86.Desktop.base"),
+            Package("Microsoft.VC.14.51.CRT.x86.Store.base"),
+            Package("Microsoft.VC.14.51.Premium.Tools.HostX64.TargetX64.base"),
+            Package("Microsoft.VC.14.51.Premium.Tools.HostX64.TargetX86.base"),
+            Package("Microsoft.VC.14.51.PGO.x64.base"),
+            Package("Microsoft.VC.14.51.PGO.x86.base"),
+            Package("Microsoft.VC.14.51.ATL.x64.base"),
+            Package("Microsoft.VC.14.51.ATL.x86.base"),
+            Package("Microsoft.VC.14.51.CRT.Redist.x64.base"),
+            Package("Microsoft.VC.14.51.CRT.Redist.x86.base"),
+            Package("Microsoft.VC.14.51.ASAN.X64.base", payloads: [Payload("asan-x64.vsix")]),
+            Package(
+                "Microsoft.VC.14.51.ASAN.X86.base",
+                [
+                    "Microsoft.VC.14.51.ASAN.Headers.base",
+                    "Microsoft.VC.14.51.ASAN.X64.base",
+                    "Microsoft.VC.14.51.ASAN.ARM64.base"
+                ],
+                [Payload("asan-x86.vsix")]),
+            Package("Microsoft.VC.14.51.ASAN.ARM64.base", payloads: [Payload("asan-arm64.vsix")]),
+            Package("Win11SDK_10.0.26100", ["Win11SDKPayloads"]),
+            Package(
+                "Win11SDKPayloads",
+                payloads:
+                [
+                    Payload(@"Installers\Windows SDK for Windows Store Apps Tools-x86_en-us.msi"),
+                    Payload(@"Installers\Windows SDK for Windows Store Apps Headers-x86_en-us.msi"),
+                    Payload(@"Installers\Windows SDK for Windows Store Apps Libs-x86_en-us.msi"),
+                    Payload(@"Installers\Universal CRT Headers Libraries and Sources-x86_en-us.msi"),
+                    Payload(@"Installers\Universal CRT Redistributable-x86_en-us.msi"),
+                    Payload(@"Installers\Windows SDK Desktop Libs x64-x86_en-us.msi"),
+                    Payload(@"Installers\Windows SDK Desktop Libs x86-x86_en-us.msi")
+                ]),
+        ];
+
+        return new PackageIndex("test", "test", "test", "test", "DevTest", "0", "VisualStudio", packages);
+    }
+
+    private static PackageInfo Package(string id, IReadOnlyList<string>? dependencies = null, IReadOnlyList<PayloadInfo>? payloads = null)
+    {
+        return new PackageInfo(id, id.ToLowerInvariant(), null, null, dependencies ?? [], payloads ?? []);
+    }
+
+    private static PayloadInfo Payload(string fileName)
+    {
+        return new PayloadInfo(fileName, "https://example.invalid/" + fileName.Replace('\\', '/'), "sha256", 1);
     }
 }

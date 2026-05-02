@@ -92,6 +92,8 @@ public sealed class PlanBuilder
 			AddCommonRoots();
 		}
 		List<PlannedPackage> rootPackages = new();
+		string requestedHost = request.Host.Cli();
+		HashSet<string> requestedTargets = new(supportedTargets.Select(x => x.Cli()), StringComparer.OrdinalIgnoreCase);
 		foreach ((string id, string reason) in roots.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
 		{
 			PackageInfo? package = index.Find(id);
@@ -107,6 +109,7 @@ public sealed class PlanBuilder
 		}
 		IReadOnlyList<PackageInfo> closurePackages = index.ResolveDependencyClosure(roots.Keys, ShouldExpandDependencies)
 			.Where(x => !IsMsvcAuxiliaryPropsPackage(x.Id))
+			.Where(x => IsRelevantForRequestedArchitectures(x.Id, requestedHost, requestedTargets))
 			.ToList();
 		List<PlannedPackage> dependencyClosure = closurePackages
 			.Select(x => new PlannedPackage(x.Id, Required: true, roots.GetValueOrDefault(x.Id, "dependency"), x.Payloads.Count))
@@ -183,6 +186,89 @@ public sealed class PlanBuilder
 		}
 
 		return !package.Id.StartsWith("Microsoft.VisualCpp.Tools.Host", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool IsRelevantForRequestedArchitectures(string packageId, string host, HashSet<string> targets)
+	{
+		if (TryGetHostTarget(packageId, ".Tools.Host", out string? packageHost, out string? packageTarget))
+		{
+			return packageHost.Equals(host, StringComparison.OrdinalIgnoreCase)
+				&& targets.Contains(packageTarget);
+		}
+
+		if (TryGetHostTarget(packageId, "Microsoft.VisualCpp.Tools.Host", out packageHost, out packageTarget))
+		{
+			return packageHost.Equals(host, StringComparison.OrdinalIgnoreCase)
+				&& targets.Contains(packageTarget);
+		}
+
+		if (TryGetTargetArchitecture(packageId, ".ASAN.", out string? target)
+			|| TryGetTargetArchitecture(packageId, ".ATL.", out target)
+			|| TryGetTargetArchitecture(packageId, ".PGO.", out target)
+			|| TryGetTargetArchitecture(packageId, ".CRT.Redist.", out target)
+			|| TryGetTargetArchitecture(packageId, ".CRT.", out target))
+		{
+			return targets.Contains(target);
+		}
+
+		return true;
+	}
+
+	private static bool TryGetHostTarget(string packageId, string marker, out string host, out string target)
+	{
+		host = "";
+		target = "";
+		int hostIndex = packageId.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+		if (hostIndex < 0)
+		{
+			return false;
+		}
+
+		int hostStart = hostIndex + marker.Length;
+		int targetMarkerIndex = packageId.IndexOf(".Target", hostStart, StringComparison.OrdinalIgnoreCase);
+		if (targetMarkerIndex < 0)
+		{
+			return false;
+		}
+
+		string hostToken = packageId[hostStart..targetMarkerIndex];
+		int targetStart = targetMarkerIndex + ".Target".Length;
+		int targetEnd = packageId.IndexOf('.', targetStart);
+		string targetToken = targetEnd < 0 ? packageId[targetStart..] : packageId[targetStart..targetEnd];
+
+		return TryNormalizeArchitecture(hostToken, out host)
+			&& TryNormalizeArchitecture(targetToken, out target);
+	}
+
+	private static bool TryGetTargetArchitecture(string packageId, string marker, out string target)
+	{
+		target = "";
+		int markerIndex = packageId.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+		if (markerIndex < 0)
+		{
+			return false;
+		}
+
+		int tokenStart = markerIndex + marker.Length;
+		int tokenEnd = packageId.IndexOf('.', tokenStart);
+		string token = tokenEnd < 0 ? packageId[tokenStart..] : packageId[tokenStart..tokenEnd];
+		return TryNormalizeArchitecture(token, out target);
+	}
+
+	private static bool TryNormalizeArchitecture(string value, out string architecture)
+	{
+		foreach (Architecture candidate in AllArchitectures)
+		{
+			if (value.Equals(candidate.PackageTitle(), StringComparison.OrdinalIgnoreCase)
+				|| value.Equals(candidate.Cli(), StringComparison.OrdinalIgnoreCase))
+			{
+				architecture = candidate.Cli();
+				return true;
+			}
+		}
+
+		architecture = "";
+		return false;
 	}
 
 	private static InstallPlan UnsupportedHost(PackageIndex index, PlanRequest request, ResolvedVersion msvc, ResolvedVersion sdk, ResolvedVersion redist)
