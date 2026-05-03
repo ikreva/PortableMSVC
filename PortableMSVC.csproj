@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>14.0</LangVersion>
@@ -19,7 +22,8 @@
     <PortableMSVCUpxPath>$(MSBuildProjectDirectory)\tools\upx.exe</PortableMSVCUpxPath>
     <PortableMSVCUpxOptions>--best</PortableMSVCUpxOptions>
     <PortableMSVCUpxOptions Condition="'$(RuntimeIdentifier)' == 'win-x86'">--best --force</PortableMSVCUpxOptions>
-    <_PortableMSVCUpxSupportedRid Condition="'$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-x86'">true</_PortableMSVCUpxSupportedRid>
+    <_PortableMSVCUpxSupportedRid
+      Condition="'$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-x86'">true</_PortableMSVCUpxSupportedRid>
     <_PortableMSVCUpxSupportedRid Condition="'$(_PortableMSVCUpxSupportedRid)' == ''">false</_PortableMSVCUpxSupportedRid>
   </PropertyGroup>
 
