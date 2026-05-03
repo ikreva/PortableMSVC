@@ -27,7 +27,7 @@ public sealed class PlanBuilder
 		{
 			return Failed(index, request, ex.Message);
 		}
-		if (request.Host == Architecture.Arm)
+		if (!PlanRequest.IsSupportedHost(request.Host))
 		{
 			return UnsupportedHost(index, request, msvc, sdk, redist);
 		}
@@ -276,7 +276,7 @@ public sealed class PlanBuilder
 		PlanIssue issue = new PlanIssue(
 			"error",
 			"unsupported-host-architecture",
-			$"VS {index.VsAlias} / MSVC {msvc.FullVersion} 不支持 host arm。MSVC host 架构只支持 x64、x86、arm64；arm 表示 ARM32，只能作为 target 使用。",
+			$"VS {index.VsAlias} / MSVC {msvc.FullVersion} 不支持 host {request.Host.Cli()}。MSVC host 架构只支持 x64、x86、arm64；arm 表示 ARM32，只能作为 target 使用。",
 			"请改用 --host x64、--host x86 或 --host arm64；如果要生成 ARM32 程序，请使用 --target arm。");
 		return new InstallPlan(
 			index.VsAlias,

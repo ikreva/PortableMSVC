@@ -9,7 +9,17 @@ public sealed class Downloader
 
 	private static readonly ConcurrentDictionary<string, SemaphoreSlim> DownloadLocks = new(StringComparer.OrdinalIgnoreCase);
 
-	private readonly HttpClient _httpClient = new HttpClient();
+	private readonly HttpClient _httpClient;
+
+	public Downloader()
+		: this(SharedHttpClient.Instance)
+	{
+	}
+
+	public Downloader(HttpClient httpClient)
+	{
+		_httpClient = httpClient;
+	}
 
 	public async Task<DownloadedFile> DownloadAsync(PlannedPayload payload, string cacheDirectory, CancellationToken cancellationToken)
 	{

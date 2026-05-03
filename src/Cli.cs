@@ -6,6 +6,8 @@ public static class Cli
 {
 	public static async Task<int> RunAsync(string[] args)
 	{
+		bool verbose = HasVerbose(args);
+		args = StripGlobalOptions(args);
 		try
 		{
 			if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
@@ -41,7 +43,7 @@ public static class Cli
 		}
 		catch (Exception ex) when (ex is ArgumentException or FileNotFoundException or InvalidDataException or InvalidOperationException)
 		{
-			await Console.Error.WriteLineAsync(ex.Message);
+			await WriteExceptionAsync(ex, verbose);
 			return 2;
 		}
 	}
@@ -193,16 +195,30 @@ public static class Cli
 	{
 		string vs = GetOption(options, "--vs") ?? "latest";
 		Architecture host = ArchitectureNames.Parse(GetOption(options, "--host") ?? "x64");
-		if (host == Architecture.Arm)
-		{
-			throw new ArgumentException("--host arm 不受支持。MSVC host 架构只支持 x64、x86、arm64；arm 表示 ARM32，只能作为 --target 使用。");
-		}
+		PlanRequest.ThrowIfUnsupportedHost(host);
 		IReadOnlyList<string> targetValues = GetValues(options, "--target");
 		List<Architecture> targets = targetValues.Count == 0
 			? new List<Architecture> { Architecture.X64 }
 			: targetValues.SelectMany((string x) => x.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Select(ArchitectureNames.Parse).Distinct()
 				.ToList();
 		return new PlanRequest(ManifestLoader.NormalizeVs(vs), GetOption(options, "--vc"), GetOption(options, "--sdk"), GetOption(options, "--redist"), host, targets, HasOption(options, "--with-runtime"));
+	}
+
+	private static bool HasVerbose(string[] args)
+	{
+		return args.Any(static arg => arg.Equals("--verbose", StringComparison.OrdinalIgnoreCase));
+	}
+
+	private static string[] StripGlobalOptions(string[] args)
+	{
+		return args
+			.Where(static arg => !arg.Equals("--verbose", StringComparison.OrdinalIgnoreCase))
+			.ToArray();
+	}
+
+	private static async Task WriteExceptionAsync(Exception ex, bool verbose)
+	{
+		await Console.Error.WriteLineAsync(verbose ? ex.ToString() : ex.Message);
 	}
 
 	private static Dictionary<string, List<string>> ParseOptions(string[] args, int startIndex)
@@ -302,6 +318,7 @@ Portable MSVC 工具链提取器
   --copy-runtime-dlls   复制运行/调试 DLL 到编译器 bin 目录
   --with-runtime        下载 VC runtime / debug runtime 官方安装包
   --dry-run             仅生成安装计划，不执行下载和安装
+  --verbose             出错时输出完整异常堆栈
 
 架构支持：
   VS 版本       host                 target

@@ -20,10 +20,14 @@ public sealed class ManifestCache
 	public static string DefaultCacheDirectory => Path.Combine(AppContext.BaseDirectory, "Cache", "manifests");
 
 	public ManifestCache(string cacheDirectory)
+		: this(cacheDirectory, SharedHttpClient.Instance)
+	{
+	}
+
+	public ManifestCache(string cacheDirectory, HttpClient httpClient)
 	{
 		_cacheDirectory = cacheDirectory;
-		_http = new HttpClient();
-		_http.DefaultRequestHeaders.Add("User-Agent", "PortableMSVC/1.0");
+		_http = httpClient;
 	}
 
 	public async Task<string> EnsureAsync(string vsAlias, bool forceRefresh, CancellationToken ct)

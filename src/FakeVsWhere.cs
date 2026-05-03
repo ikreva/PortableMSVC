@@ -55,9 +55,14 @@ public static class FakeVsWhere
 		}
 		catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
 		{
-			Console.Error.WriteLine(ex.Message);
+			WriteException(ex, args);
 			return 1;
 		}
+	}
+
+	private static void WriteException(Exception ex, string[] args)
+	{
+		Console.Error.WriteLine(args.Any(static arg => arg.Equals("--verbose", StringComparison.OrdinalIgnoreCase)) ? ex.ToString() : ex.Message);
 	}
 
 	public static bool IsVsWhereProcess()

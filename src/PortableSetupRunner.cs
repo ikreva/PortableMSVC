@@ -51,7 +51,7 @@ public static class PortableSetupRunner
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or Win32Exception or JsonException)
 		{
-			Console.Error.WriteLine(ex.Message);
+			Console.Error.WriteLine(HasArg(args, "--verbose") ? ex.ToString() : ex.Message);
 			return 1;
 		}
 	}
