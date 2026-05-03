@@ -15,9 +15,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>assets\PortableMSVC.ico</ApplicationIcon>
-    <PortableMSVCUpxPath>$(MSBuildProjectDirectory)\tools\upx\upx.exe</PortableMSVCUpxPath>
+    <PortableMSVCUpxPath>$(MSBuildProjectDirectory)\tools\upx.exe</PortableMSVCUpxPath>
     <PortableMSVCCompressWithUpx>true</PortableMSVCCompressWithUpx>
-    <_PortableMSVCUpxSupportedRid Condition="'$(RuntimeIdentifier)' == 'win-arm64' or '$(RuntimeIdentifier)' == 'win-arm'">false</_PortableMSVCUpxSupportedRid>
+    <_PortableMSVCUpxSupportedRid
+      Condition="'$(RuntimeIdentifier)' == 'win-arm64' or '$(RuntimeIdentifier)' == 'win-arm'">false</_PortableMSVCUpxSupportedRid>
     <_PortableMSVCUpxSupportedRid Condition="'$(_PortableMSVCUpxSupportedRid)' == ''">true</_PortableMSVCUpxSupportedRid>
   </PropertyGroup>
 
@@ -37,17 +38,21 @@
     <AdditionalNativeLibraryDirectories Include="$(PortableMSVCNativeAotSdkUmLibDir)" />
   </ItemGroup>
 
-  <Target Name="PatchPortableMSVCOriginalFilename" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+  <Target Name="PatchPortableMSVCOriginalFilename" AfterTargets="Build"
+    Condition="'$(OS)' == 'Windows_NT'">
     <ItemGroup>
-      <_PortableMSVCExeToPatch Include="$(TargetDir)$(AssemblyName).exe" Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
-      <_PortableMSVCExeToPatch Include="$(NativeOutputPath)$(AssemblyName).exe" Condition="'$(NativeOutputPath)' != '' and Exists('$(NativeOutputPath)$(AssemblyName).exe')" />
+      <_PortableMSVCExeToPatch Include="$(TargetDir)$(AssemblyName).exe"
+        Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
+      <_PortableMSVCExeToPatch Include="$(NativeOutputPath)$(AssemblyName).exe"
+        Condition="'$(NativeOutputPath)' != '' and Exists('$(NativeOutputPath)$(AssemblyName).exe')" />
     </ItemGroup>
     <Exec
       Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\PatchOriginalFilename.ps1&quot; @(_PortableMSVCExeToPatch->'&quot;%(FullPath)&quot;', ' ')"
       Condition="'@(_PortableMSVCExeToPatch)' != ''" />
   </Target>
 
-  <Target Name="FinalizePortableMSVCPublishExecutable" AfterTargets="CopyNativeBinary" Condition="'$(OS)' == 'Windows_NT' and '$(PublishDir)' != '' and Exists('$(PublishDir)$(AssemblyName).exe')">
+  <Target Name="FinalizePortableMSVCPublishExecutable" AfterTargets="CopyNativeBinary"
+    Condition="'$(OS)' == 'Windows_NT' and '$(PublishDir)' != '' and Exists('$(PublishDir)$(AssemblyName).exe')">
     <ItemGroup>
       <_PortableMSVCPublishExe Include="$(PublishDir)$(AssemblyName).exe" />
     </ItemGroup>
